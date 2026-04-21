@@ -1,190 +1,105 @@
-function detectGoldenPullback(data) {
-  let score = 0;
+function detectEarlyTrendReversalBreakout(indicators) {
+  const close = Number(indicators.close);
+  const ema50 = Number(indicators.ema50);
+  const ema200 = Number(indicators.ema200);
+  const ema50Past5 = Number(indicators.ema50Past5);
+  const return20d = Number(indicators.return20d);
+  const return60d = Number(indicators.return60d);
+  const priceTo120High = Number(indicators.priceTo120High);
 
-  // -----------------
-  // 1. 골든크로스 (최근 발생)
-  // -----------------
-  if (
-    data.prev_ema50 <= data.prev_ema200 &&
-    data.ema50 > data.ema200
-  ) {
-    score += 30;
-  }
+  const trendPositionPass =
+    Number.isFinite(close) &&
+    Number.isFinite(ema50) &&
+    Number.isFinite(ema50Past5) &&
+    close > ema50 &&
+    ema50 >= ema50Past5;
 
-  // -----------------
-  // 2. 골든 이후 기간 제한 (초기만)
-  // -----------------
-  if (data.daysSinceGolden <= 10) {
-    score += 10;
-  } else {
-    score -= 10; // 늦은 진입 컷
-  }
+  const emaStructurePass =
+    Number.isFinite(ema50) &&
+    Number.isFinite(ema200) &&
+    ema200 > 0 &&
+    (Math.abs(ema50 - ema200) / ema200) < 0.15;
 
-  // -----------------
-  // 3. 눌림 (EMA50 터치)
-  // -----------------
-  const dist = Math.abs(data.price - data.ema50) / data.ema50;
+  const breakoutPass =
+    Boolean(indicators.breakoutWithin3Days) &&
+    Boolean(indicators.breakoutDayBullish) &&
+    Boolean(indicators.breakoutCloseAbovePrev20High);
 
-  if (dist < 0.03) score += 15;
+  const volumePass =
+    Boolean(indicators.breakoutVolumePass) &&
+    Boolean(indicators.breakoutPreVolumeContractionPass);
 
-  // -----------------
-  // 4. 지지 확인
-  // -----------------
-  if (
-    data.low >= data.ema50 * 0.97 &&
-    data.close > data.ema50
-  ) {
-    score += 15;
-  }
+  const overheatPass =
+    Number.isFinite(return20d) &&
+    Number.isFinite(return60d) &&
+    Number.isFinite(priceTo120High) &&
+    return20d < 12 &&
+    return60d < 25 &&
+    priceTo120High < 0.92;
 
-  // -----------------
-  // 5. 재돌파 (진입 타이밍)
-  // -----------------
-  if (
-    data.price > data.prevHigh &&
-    data.volume > data.avgVolume * 1.5
-  ) {
-    score += 20;
-  }
-
-  // -----------------
-  // ❗ 과열 제거
-  // -----------------
-  const position = data.price / data.recentHigh;
-  if (position > 0.9) score -= 20;
-
-  return score;
-}
-
-function detectEarlyBottomBreakout(data) {
-  const price = Number(data.price ?? data.close);
-  const open = Number(data.open);
-  const close = Number(data.close ?? data.price);
-  const prevHigh = Number(data.prevHigh ?? data.previousHigh);
-  const volume = Number(data.volume);
-  const prevVolume = Number(data.prevVolume ?? data.previousVolume);
-  const avgVol5 = Number(data.avgVol5 ?? data.avgVolume5);
-  const avgVol20 = Number(data.avgVol20 ?? data.avgVolume20);
-  const return20d = Number(data.return20d);
-  const return60d = Number(data.return60d);
-  const rangeLow120 = Number(data.rangeLow120 ?? data.low120 ?? data.lowest120);
-  const rangeHigh120 = Number(data.rangeHigh120 ?? data.high120 ?? data.highest120);
-
-  if (
-    !Number.isFinite(price) ||
-    !Number.isFinite(open) ||
-    !Number.isFinite(close) ||
-    !Number.isFinite(prevHigh) ||
-    !Number.isFinite(volume) ||
-    !Number.isFinite(prevVolume) ||
-    !Number.isFinite(avgVol5) ||
-    !Number.isFinite(avgVol20) ||
-    !Number.isFinite(return20d) ||
-    !Number.isFinite(return60d) ||
-    !Number.isFinite(rangeLow120) ||
-    !Number.isFinite(rangeHigh120) ||
-    rangeHigh120 <= rangeLow120 ||
-    avgVol20 <= 0
-  ) {
-    return false;
-  }
-
-  // [1] Position filter: price in lower 40% of 120-day range
-  const rangePos = (price - rangeLow120) / (rangeHigh120 - rangeLow120);
-  const inLower40 = rangePos <= 0.4;
-
-  // [2] Volume contraction
-  const volumeContraction = avgVol5 < (avgVol20 * 0.7);
-
-  // [3] First volume spike
-  const firstVolumeSpike = volume > (avgVol20 * 2) && prevVolume < avgVol20;
-
-  // [4] Price reaction
-  const bullishCandle = close > open;
-  const breakoutPrevHigh = price > prevHigh;
-
-  // [5] Filters
-  const earlyReturnFilter = return20d < 10 && return60d < 20;
-
-  return inLower40 &&
-    volumeContraction &&
-    firstVolumeSpike &&
-    bullishCandle &&
-    breakoutPrevHigh &&
-    earlyReturnFilter;
+  return {
+    pass: trendPositionPass && emaStructurePass && breakoutPass && volumePass && overheatPass,
+    trendPositionPass,
+    emaStructurePass,
+    breakoutPass,
+    volumePass,
+    overheatPass
+  };
 }
 
 function scoreStock(input) {
-  const { code, name, indicators, marketSync, institutionalNetBuy, foreignNetBuy } = input;
+  const { code, name, indicators } = input;
   if (!indicators) return null;
 
-  const data = {
-    prev_ema50: Number(indicators.prev_ema50 ?? indicators.ema50Prev ?? indicators.ma50Prev ?? indicators.ma50Past),
-    prev_ema200: Number(indicators.prev_ema200 ?? indicators.ema200Prev ?? indicators.ma200Prev ?? indicators.ma200Past),
-    ema50: Number(indicators.ema50 ?? indicators.ma50 ?? indicators.ma60 ?? indicators.ma20),
-    ema200: Number(indicators.ema200 ?? indicators.ma200 ?? indicators.ma120 ?? indicators.ma60),
-    daysSinceGolden: Number(indicators.daysSinceGolden ?? indicators.daysSinceGoldenCross ?? indicators.daysSinceMaCross ?? indicators.maCrossAge ?? 999),
-    price: Number(indicators.price ?? indicators.close),
-    low: Number(indicators.low ?? indicators.close),
-    close: Number(indicators.close),
-    prevHigh: Number(indicators.prevHigh ?? indicators.recentHigh),
-    volume: Number(indicators.volume),
-    avgVolume: Number(indicators.avgVolume ?? indicators.avgVolume5),
-    recentHigh: Number(indicators.recentHigh)
-  };
+  const checks = detectEarlyTrendReversalBreakout(indicators);
+  if (!checks.pass) return null;
 
-  const strategyScore = detectGoldenPullback(data);
-  const flowScore = (institutionalNetBuy > 0 ? 5 : 0) + (foreignNetBuy > 0 ? 5 : 0);
-  const marketScore = marketSync ? 10 : 0;
-  const score = strategyScore + flowScore + marketScore;
-  const signal = score >= 70 ? "BUY" : score >= 60 ? "OBSERVE" : "DROP";
-
-  let trendScore = 0;
-  if (data.prev_ema50 <= data.prev_ema200 && data.ema50 > data.ema200) trendScore += 30;
-  if (data.daysSinceGolden <= 10) trendScore += 10;
-
-  let pullbackScore = 0;
-  const dist = Math.abs(data.price - data.ema50) / data.ema50;
-  if (dist < 0.03) pullbackScore += 15;
-  if (data.low >= data.ema50 * 0.97 && data.close > data.ema50) pullbackScore += 15;
-
-  const volumeScore = (data.price > data.prevHigh && data.volume > data.avgVolume * 1.5) ? 20 : 0;
-  const penalty = (data.daysSinceGolden > 10 ? 10 : 0) + ((data.price / data.recentHigh) > 0.9 ? 20 : 0);
+  let score = 70;
+  const emaCrossBonus = indicators.ema50CrossedAboveEma200Within15Days ? 10 : 0;
+  const pullbackBonus = indicators.pullbackNearEma50BeforeBreakout ? 10 : 0;
+  const rsiBonus = Number.isFinite(indicators.rsi14) && indicators.rsi14 >= 45 && indicators.rsi14 <= 65 ? 10 : 0;
+  score += emaCrossBonus + pullbackBonus + rsiBonus;
+  score = Math.min(100, score);
 
   return {
     code,
     name,
     price: indicators.close,
     score,
-    signal,
+    signal: score >= 90 ? "BUY" : "OBSERVE",
     stopLossPct: -5,
-    takeProfitPctMin: 10,
+    takeProfitPctMin: 8,
     takeProfitPctMax: 20,
     maxHoldingDays: 20,
+    ema50: indicators.ema50,
+    ema200: indicators.ema200,
+    return20d: indicators.return20d,
+    return60d: indicators.return60d,
+    breakoutStatus: checks.breakoutPass ? "Yes" : "No",
+    volumeMultiple: indicators.breakoutVolumeMultiple,
     breakdown: {
-      trend: trendScore,
-      pullback: pullbackScore,
-      volume: volumeScore,
-      institution: institutionalNetBuy > 0 ? 5 : 0,
-      foreign: foreignNetBuy > 0 ? 5 : 0,
-      momentum: 0,
-      market: marketScore,
-      penalty
+      base: 70,
+      emaCrossBonus,
+      pullbackBonus,
+      rsiBonus,
+      trendPositionPass: checks.trendPositionPass,
+      emaStructurePass: checks.emaStructurePass,
+      breakoutPass: checks.breakoutPass,
+      volumePass: checks.volumePass,
+      overheatPass: checks.overheatPass
     }
   };
 }
 
-function rankTop(scoredStocks, topN = 5) {
+function rankTop(scoredStocks, topN = 15) {
   return scoredStocks
     .filter(Boolean)
-    .filter((stock) => stock.score >= 70)
     .sort((a, b) => b.score - a.score)
     .slice(0, topN);
 }
 
 module.exports = {
-  detectGoldenPullback,
-  detectEarlyBottomBreakout,
+  detectEarlyTrendReversalBreakout,
   scoreStock,
   rankTop
 };

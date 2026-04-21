@@ -257,68 +257,55 @@ function getMarketStatus(kospiCandles, kosdaqCandles) {
   return { status: "OFF", score };
 }
 
-function buildTelegramMessage(sections, options) {
-  const { topN, marketStatus, marketScore, minPrice, filteredSummary, allowBuy } = options;
-  const signalLabelMap = {
-    BUY: "매수",
-    OBSERVE: "관찰",
-    DROP: "버림"
-  };
+function buildTelegramMessage(stocks, options) {
+  const { topN, marketStatus, marketScore, minPrice, filteredSummary } = options;
   const marketStatusText = marketStatus === "ON"
     ? "🟢 ON"
     : marketStatus === "NEUTRAL"
       ? "🟡 NEUTRAL"
       : "⚪ OFF";
 
+  const formatNum = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : "-");
+  const top = stocks.slice(0, topN);
+
   const lines = [
-    `📊 <b>Swing Top ${topN} (장마감)</b>`,
+    `📊 <b>Early Trend Reversal Breakout Top ${topN}</b>`,
     `🕒 <b>기준시각</b> <code>${escapeHtml(formatKoreanDateTime(new Date()))}</code>`,
     `🧭 <b>시장상태</b> ${marketStatusText} <code>(score ${marketScore})</code>`,
     `🧹 <b>필터</b> ETF/ETN 제외 | ${minPrice.toLocaleString("ko-KR")}원 초과 | 투자주의 제외`,
     `🚫 <b>제외건수</b> ETF/ETN ${filteredSummary.etfOrEtn} | 저가 ${filteredSummary.lowPrice} | 투자주의 ${filteredSummary.investmentCaution}`,
-    !allowBuy ? "⚠️ <b>매수 비활성화: 시장 조건 미충족</b>" : "✅ <b>매수 가능: 시장 조건 충족</b>",
     "",
+    "<b>Columns</b>",
+    "<code>Ticker | Name | Price | EMA50 | EMA200 | 20D% | 60D% | VolX | Breakout | Score</code>",
     "━━━━━━━━━━━━"
   ];
 
-  function appendSection(title, stocks, emptyText) {
-    lines.push(`<b>${title}</b>`);
-    if (!stocks.length) {
-      lines.push(emptyText);
-      lines.push("");
-      return;
-    }
-    const medal = ["🥇", "🥈", "🥉"];
-    stocks.forEach((stock, index) => {
-      const b = stock.breakdown;
-      const rankIcon = medal[index] || "📌";
-      const signalEmoji = stock.signal === "BUY" ? "🔥" : stock.signal === "OBSERVE" ? "✅" : "❌";
-      const priceText = Number.isFinite(stock.price) ? `${Math.round(stock.price).toLocaleString("ko-KR")}원` : "-";
-      const safeName = escapeHtml(stock.name);
-      const safeCode = escapeHtml(stock.code);
-      const safeSignal = escapeHtml(signalLabelMap[stock.signal] || stock.signal);
-
-      lines.push(`${rankIcon} <b>${index + 1}. ${safeName}</b> <code>(${safeCode})</code>`);
-      lines.push(`   <b>점수 ${stock.score}점</b> | ${signalEmoji} <b>${safeSignal}</b>`);
-      lines.push(`   종가 <code>${escapeHtml(priceText)}</code>`);
-      lines.push(`   추세 ${b.trend} | 눌림 ${b.pullback} | 거래량 ${b.volume} | 기관 ${b.institution} | 외인 ${b.foreign} | 모멘텀 ${b.momentum} | 패널티 -${b.penalty}`);
-      lines.push("");
-    });
+  if (!top.length) {
+    lines.push("조건을 모두 통과한 종목이 없습니다.");
+    return lines.join("\n");
   }
 
-  appendSection("🟡 WATCH (score ≥ 65)", sections.watchList, "조건 충족 종목이 없습니다.");
-  appendSection(
-    allowBuy ? "🟢 BUY (score ≥ 70 + marketStatus=ON)" : "🟢 BUY (비활성화)",
-    sections.buyList,
-    allowBuy ? "조건 충족 종목이 없습니다." : "시장 조건 미충족으로 BUY 신호가 비활성화되었습니다."
-  );
+  top.forEach((stock) => {
+    lines.push(
+      `<code>${escapeHtml(stock.code)} | ${escapeHtml(stock.name)} | ${formatNum(stock.price)} | ${formatNum(stock.ema50)} | ${formatNum(stock.ema200)} | ${formatNum(stock.return20d)} | ${formatNum(stock.return60d)} | ${formatNum(stock.volumeMultiple)} | ${escapeHtml(stock.breakoutStatus)} | ${formatNum(stock.score, 0)}</code>`
+    );
+  });
 
   lines.push("━━━━━━━━━━━━");
-  lines.push("🧠 <b>점수 계산법 (V2)</b>");
-  lines.push("추세(25) + 눌림(25) + 거래량(15) + 기관(15) + 외인(15) + 모멘텀(10) - 과열/지연 패널티");
-  lines.push("");
-  lines.push("📘 <b>점수 의미</b>");
-  lines.push("75점 이상: 매수 | 70~74점: 관찰 | 70점 미만: 버림");
+  lines.push("<b>TOP 5 Summary</b>");
+  top.slice(0, 5).forEach((stock, idx) => {
+    const entryReasons = [];
+    if (stock.breakdown?.emaCrossBonus) entryReasons.push("EMA50>EMA200 recent cross");
+    if (stock.breakdown?.pullbackBonus) entryReasons.push("pullback near EMA50");
+    if (stock.breakdown?.rsiBonus) entryReasons.push("RSI(14) in 45~65");
+    const entryText = entryReasons.length
+      ? `Core breakout + ${entryReasons.join(", ")}`
+      : "Core breakout rules passed with valid volume expansion";
+    lines.push(`<b>${idx + 1}. ${escapeHtml(stock.code)} ${escapeHtml(stock.name)}</b>`);
+    lines.push(`- Entry: ${escapeHtml(entryText)}`);
+    lines.push("- Invalidation: Daily close below EMA50");
+  });
+
   return lines.join("\n");
 }
 
@@ -356,7 +343,7 @@ async function runOnce() {
 
   const api = new KisApi(config);
   const historyDays = toInt(process.env.KIS_HISTORY_DAYS, 220);
-  const topN = Math.max(1, toInt(process.env.KIS_TOP_N, 10));
+  const topN = Math.max(1, toInt(process.env.KIS_TOP_N, 15));
   const minPrice = Math.max(0, toInt(process.env.KIS_MIN_PRICE, 1000));
   const candidateLimit = Math.max(topN * 4, toInt(process.env.KIS_CANDIDATE_LIMIT, 60));
   const concurrency = toInt(process.env.KIS_CONCURRENCY, 4);
@@ -390,9 +377,7 @@ async function runOnce() {
   const marketStatus = marketEvaluation.status;
   const marketScore = marketEvaluation.score;
   const marketSync = marketStatus !== "OFF";
-  const allowBuy = marketStatus === "ON";
-
-  logger.info(`Market status: status=${marketStatus}, score=${marketScore}, allowBuy=${allowBuy}`);
+  logger.info(`Market status: status=${marketStatus}, score=${marketScore}`);
 
   const candidates = dedupeCandidatesWithRows(volumeRankRaw, fluctuationRaw).slice(0, candidateLimit);
   if (!candidates.length) {
@@ -451,20 +436,12 @@ async function runOnce() {
     throw new Error("No scored stocks produced");
   }
 
-  const watchList = scoredSorted.filter((stock) => stock.score >= 65).slice(0, topN);
-  const buyList = allowBuy ? scoredSorted.filter((stock) => stock.score >= 70).slice(0, topN) : [];
-  const watchFallback = watchList.length ? watchList : scoredSorted.slice(0, topN);
-
   const alertText = buildTelegramMessage(
-    {
-      watchList: watchFallback,
-      buyList
-    },
+    scoredSorted,
     {
       topN,
       marketStatus,
       marketScore,
-      allowBuy,
       minPrice,
       filteredSummary
     }

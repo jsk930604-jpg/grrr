@@ -39,6 +39,23 @@ function sma(values, period) {
   return out;
 }
 
+function ema(values, period) {
+  const out = new Array(values.length).fill(null);
+  if (values.length < period) return out;
+  const multiplier = 2 / (period + 1);
+  let seed = 0;
+  for (let i = 0; i < period; i += 1) seed += values[i];
+  let prev = seed / period;
+  out[period - 1] = prev;
+
+  for (let i = period; i < values.length; i += 1) {
+    const next = ((values[i] - prev) * multiplier) + prev;
+    out[i] = next;
+    prev = next;
+  }
+  return out;
+}
+
 function rsi(values, period = 14) {
   const out = new Array(values.length).fill(null);
   if (values.length <= period) return out;
@@ -114,7 +131,7 @@ function normalizeCandles(rows, options = {}) {
 }
 
 function buildIndicatorSnapshot(candles) {
-  if (candles.length < 70) return null;
+  if (candles.length < 200) return null;
 
   const close = candles.map((c) => c.close);
   const open = candles.map((c) => c.open);
@@ -122,92 +139,120 @@ function buildIndicatorSnapshot(candles) {
   const low = candles.map((c) => c.low);
   const volume = candles.map((c) => (Number.isFinite(c.volume) ? c.volume : 0));
 
-  const ma20Series = sma(close, 20);
-  const ma60Series = sma(close, 60);
+  const ema50Series = ema(close, 50);
+  const ema200Series = ema(close, 200);
   const rsiSeries = rsi(close, 14);
-  const atrSeries = atr(high, low, close, 14);
 
   const last = close.length - 1;
-  const ma20 = ma20Series[last];
-  const ma60 = ma60Series[last];
-  const ma20Past = ma20Series[last - 5];
+  const ema50 = ema50Series[last];
+  const ema200 = ema200Series[last];
+  const ema50Past5 = ema50Series[last - 5];
   const rsi14 = rsiSeries[last];
-  const atr14 = atrSeries[last];
 
   if (
-    !Number.isFinite(ma20) ||
-    !Number.isFinite(ma60) ||
-    !Number.isFinite(ma20Past) ||
-    !Number.isFinite(rsi14) ||
-    !Number.isFinite(atr14)
+    !Number.isFinite(ema50) ||
+    !Number.isFinite(ema200) ||
+    !Number.isFinite(ema50Past5) ||
+    !Number.isFinite(rsi14)
   ) {
     return null;
   }
 
-  const avgVolume5 = mean(volume.slice(-5));
-  const return5d = close.length >= 6 ? ((close[last] / close[last - 5]) - 1) * 100 : NaN;
+  const avgVolume5 = mean(volume.slice(last - 4, last + 1));
+  const avgVolume20 = mean(volume.slice(last - 19, last + 1));
   const return3d = close.length >= 4 ? ((close[last] / close[last - 3]) - 1) * 100 : NaN;
-  const gapUpPct = close.length >= 2 ? ((open[last] / close[last - 1]) - 1) * 100 : NaN;
-  const previous20High = Math.max(...high.slice(Math.max(0, last - 20), last));
-  const breakout = close[last] > previous20High;
-  const ma20SlopeUp = ma20 > ma20Past;
-  const volumeSpike = Number.isFinite(avgVolume5) && avgVolume5 > 0 && volume[last] > avgVolume5 * 1.5;
-  const volumeSpikeStrong = Number.isFinite(avgVolume5) && avgVolume5 > 0 && volume[last] > avgVolume5 * 2.0;
-
-  const atrWindow = atrSeries.slice(Math.max(0, last - 20), last + 1).filter((v) => Number.isFinite(v));
-  const atrMean20 = atrWindow.length ? mean(atrWindow) : NaN;
-  const stableAtr = Number.isFinite(atrMean20) && atr14 <= atrMean20 * 1.2;
-
-  const returns20 = [];
-  const start = Math.max(1, close.length - 20);
-  for (let i = start; i < close.length; i += 1) {
-    returns20.push(((close[i] / close[i - 1]) - 1) * 100);
-  }
-  const hasSpike = returns20.some((x) => Math.abs(x) >= 7);
-  const last5High = Math.max(...high.slice(-5));
-  const last5Low = Math.min(...low.slice(-5));
-  const last5RangePct = ((last5High - last5Low) / close[last]) * 100;
-  const consolidationAfterSpike = hasSpike && last5RangePct <= 6;
+  const return20d = close.length >= 21 ? ((close[last] / close[last - 20]) - 1) * 100 : NaN;
+  const return60d = close.length >= 61 ? ((close[last] / close[last - 60]) - 1) * 100 : NaN;
+  const recent20High = Math.max(...high.slice(last - 20, last));
+  const high120 = Math.max(...high.slice(last - 119, last + 1));
+  const priceTo120High = Number.isFinite(high120) && high120 > 0 ? close[last] / high120 : NaN;
 
   let breakoutIndex = -1;
-  for (let i = Math.max(20, close.length - 60); i <= last; i += 1) {
-    const windowHigh = Math.max(...high.slice(i - 20, i));
-    if (close[i] > windowHigh) {
+  let breakoutVolumeMultiple = NaN;
+  let breakoutPrev5To20Ratio = NaN;
+  let breakoutPrev20High = NaN;
+  for (let i = last; i >= Math.max(20, last - 2); i -= 1) {
+    const prev20High = Math.max(...high.slice(i - 20, i));
+    const breakout = close[i] > prev20High;
+    const bullish = close[i] > open[i];
+    const vol20Avg = mean(volume.slice(i - 20, i));
+    const prev5Avg = mean(volume.slice(Math.max(0, i - 5), i));
+    const volMultiple = Number.isFinite(vol20Avg) && vol20Avg > 0 ? volume[i] / vol20Avg : NaN;
+    const prev5Ratio = Number.isFinite(vol20Avg) && vol20Avg > 0 ? prev5Avg / vol20Avg : NaN;
+    if (breakout && bullish && Number.isFinite(volMultiple) && Number.isFinite(prev5Ratio)) {
       breakoutIndex = i;
+      breakoutVolumeMultiple = volMultiple;
+      breakoutPrev5To20Ratio = prev5Ratio;
+      breakoutPrev20High = prev20High;
+      break;
     }
   }
-  const daysSinceBreakout = breakoutIndex >= 0 ? (last - breakoutIndex) : 999;
-  const firstBreakout = breakoutIndex >= 0 && daysSinceBreakout <= 3;
-  const overheated = (Number.isFinite(rsi14) && rsi14 > 70) || (Number.isFinite(return3d) && return3d > 10) || (Number.isFinite(gapUpPct) && gapUpPct > 3);
+
+  const breakoutWithin3Days = breakoutIndex >= 0 && (last - breakoutIndex) <= 2;
+  const breakoutDayBullish = breakoutIndex >= 0 ? close[breakoutIndex] > open[breakoutIndex] : false;
+  const breakoutCloseAbovePrev20High = breakoutIndex >= 0 ? close[breakoutIndex] > breakoutPrev20High : false;
+  const breakoutVolumePass = Number.isFinite(breakoutVolumeMultiple) && breakoutVolumeMultiple >= 1.8;
+  const breakoutPreVolumeContractionPass = Number.isFinite(breakoutPrev5To20Ratio) && breakoutPrev5To20Ratio <= 0.8;
+  const breakoutAgeDays = breakoutIndex >= 0 ? (last - breakoutIndex) : 999;
+
+  let ema50CrossedAboveEma200Within15Days = false;
+  for (let i = Math.max(1, last - 14); i <= last; i += 1) {
+    if (!Number.isFinite(ema50Series[i]) || !Number.isFinite(ema200Series[i])) continue;
+    if (!Number.isFinite(ema50Series[i - 1]) || !Number.isFinite(ema200Series[i - 1])) continue;
+    if (ema50Series[i - 1] <= ema200Series[i - 1] && ema50Series[i] > ema200Series[i]) {
+      ema50CrossedAboveEma200Within15Days = true;
+      break;
+    }
+  }
+
+  let pullbackNearEma50BeforeBreakout = false;
+  if (breakoutIndex >= 2) {
+    for (let i = Math.max(0, breakoutIndex - 5); i < breakoutIndex; i += 1) {
+      if (!Number.isFinite(ema50Series[i]) || ema50Series[i] <= 0) continue;
+      const distance = Math.abs(low[i] - ema50Series[i]) / ema50Series[i];
+      if (distance <= 0.03) {
+        pullbackNearEma50BeforeBreakout = true;
+        break;
+      }
+    }
+  }
 
   return {
     close: close[last],
-    recentHigh: previous20High,
-    ma20,
-    ma60,
-    ma20SlopeUp,
+    open: open[last],
+    low: low[last],
+    high: high[last],
+    recentHigh: recent20High,
+    high120,
+    priceTo120High,
+    ema50,
+    ema200,
+    ema50Past5,
     rsi14,
-    return5d,
     return3d,
-    gapUpPct,
-    daysSinceBreakout,
-    firstBreakout,
-    overheated,
-    breakout,
-    volumeSpike,
-    volumeSpikeStrong,
+    return20d,
+    return60d,
     volume: volume[last],
     avgVolume5,
-    atr14,
-    stableAtr,
-    consolidationAfterSpike
+    avgVolume20,
+    recent20High,
+    breakoutWithin3Days,
+    breakoutDayBullish,
+    breakoutCloseAbovePrev20High,
+    breakoutVolumePass,
+    breakoutPreVolumeContractionPass,
+    breakoutVolumeMultiple,
+    breakoutPrev5To20Ratio,
+    breakoutAgeDays,
+    ema50CrossedAboveEma200Within15Days,
+    pullbackNearEma50BeforeBreakout
   };
 }
 
 function marketUptrend(candles) {
   const snapshot = buildIndicatorSnapshot(candles);
   if (!snapshot) return false;
-  return snapshot.ma20 > snapshot.ma60 && snapshot.close > snapshot.ma20 && snapshot.ma20SlopeUp;
+  return snapshot.ema50 > snapshot.ema200 && snapshot.close > snapshot.ema50 && snapshot.ema50 >= snapshot.ema50Past5;
 }
 
 module.exports = {
