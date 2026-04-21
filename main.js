@@ -320,6 +320,25 @@ function buildMarketSkipMessage() {
   ].join("\n");
 }
 
+function buildNoMatchMessage(options) {
+  const { marketStatus, marketScore, minPrice, filteredSummary, reason } = options;
+  const marketStatusText = marketStatus === "ON"
+    ? "🟢 ON"
+    : marketStatus === "NEUTRAL"
+      ? "🟡 NEUTRAL"
+      : "⚪ OFF";
+
+  return [
+    "📊 <b>Early Trend Reversal Breakout</b>",
+    `🕒 <b>기준시각</b> <code>${escapeHtml(formatKoreanDateTime(new Date()))}</code>`,
+    `🧭 <b>시장상태</b> ${marketStatusText} <code>(score ${marketScore})</code>`,
+    `🧹 <b>필터</b> ETF/ETN 제외 | ${minPrice.toLocaleString("ko-KR")}원 초과 | 투자주의 제외`,
+    `🚫 <b>제외건수</b> ETF/ETN ${filteredSummary.etfOrEtn} | 저가 ${filteredSummary.lowPrice} | 투자주의 ${filteredSummary.investmentCaution}`,
+    "",
+    `ℹ️ <b>결과</b> ${escapeHtml(reason)}`
+  ].join("\n");
+}
+
 async function runOnce() {
   const config = {
     baseUrl: process.env.KIS_BASE_URL || "https://openapi.koreainvestment.com:9443",
@@ -381,13 +400,33 @@ async function runOnce() {
 
   const candidates = dedupeCandidatesWithRows(volumeRankRaw, fluctuationRaw).slice(0, candidateLimit);
   if (!candidates.length) {
-    throw new Error("No candidate stocks from ranking APIs");
+    const text = buildNoMatchMessage({
+      marketStatus,
+      marketScore,
+      minPrice,
+      filteredSummary: { etfOrEtn: 0, lowPrice: 0, investmentCaution: 0 },
+      reason: "후보 종목 데이터가 없어 선정을 스킵했습니다."
+    });
+    console.log(text);
+    await api.sendTelegramAlert(text);
+    logger.warn("No candidate stocks from ranking APIs");
+    return;
   }
 
   const filtered = prefilterCandidates(candidates, minPrice);
   const filteredSummary = { ...filtered.rejected, lowPriceAfterScoring: 0 };
   if (!filtered.eligible.length) {
-    throw new Error("No candidate stocks after ETF/price/caution filtering");
+    const text = buildNoMatchMessage({
+      marketStatus,
+      marketScore,
+      minPrice,
+      filteredSummary,
+      reason: "필터(ETF/가격/투자주의) 통과 종목이 없어 선정을 스킵했습니다."
+    });
+    console.log(text);
+    await api.sendTelegramAlert(text);
+    logger.warn("No candidate stocks after ETF/price/caution filtering");
+    return;
   }
 
   const institutionMap = new Map();
@@ -433,7 +472,17 @@ async function runOnce() {
     .filter(Boolean)
     .sort((a, b) => b.score - a.score);
   if (!scoredSorted.length) {
-    throw new Error("No scored stocks produced");
+    const text = buildNoMatchMessage({
+      marketStatus,
+      marketScore,
+      minPrice,
+      filteredSummary,
+      reason: "전략 코어 조건을 모두 통과한 종목이 없어 오늘은 알림 후보가 없습니다."
+    });
+    console.log(text);
+    await api.sendTelegramAlert(text);
+    logger.warn("No scored stocks produced");
+    return;
   }
 
   const alertText = buildTelegramMessage(
