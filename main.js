@@ -555,8 +555,8 @@ async function bootstrap() {
     return;
   }
 
-  const scheduleHour = Math.max(0, Math.min(23, toInt(process.env.KIS_ALERT_HOUR, 18)));
-  const scheduleMinute = Math.max(0, Math.min(59, toInt(process.env.KIS_ALERT_MINUTE, 0)));
+  const scheduleHour = Math.max(0, Math.min(23, toInt(process.env.KIS_ALERT_HOUR, 16)));
+  const scheduleMinute = Math.max(0, Math.min(59, toInt(process.env.KIS_ALERT_MINUTE, 30)));
   const weekdaysOnly = toBool(process.env.KIS_ALERT_WEEKDAYS_ONLY, true);
   const runOnStartup = toBool(process.env.KIS_RUN_ON_STARTUP, false);
 
