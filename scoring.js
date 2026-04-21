@@ -56,6 +56,64 @@ function detectGoldenPullback(data) {
   return score;
 }
 
+function detectEarlyBottomBreakout(data) {
+  const price = Number(data.price ?? data.close);
+  const open = Number(data.open);
+  const close = Number(data.close ?? data.price);
+  const prevHigh = Number(data.prevHigh ?? data.previousHigh);
+  const volume = Number(data.volume);
+  const prevVolume = Number(data.prevVolume ?? data.previousVolume);
+  const avgVol5 = Number(data.avgVol5 ?? data.avgVolume5);
+  const avgVol20 = Number(data.avgVol20 ?? data.avgVolume20);
+  const return20d = Number(data.return20d);
+  const return60d = Number(data.return60d);
+  const rangeLow120 = Number(data.rangeLow120 ?? data.low120 ?? data.lowest120);
+  const rangeHigh120 = Number(data.rangeHigh120 ?? data.high120 ?? data.highest120);
+
+  if (
+    !Number.isFinite(price) ||
+    !Number.isFinite(open) ||
+    !Number.isFinite(close) ||
+    !Number.isFinite(prevHigh) ||
+    !Number.isFinite(volume) ||
+    !Number.isFinite(prevVolume) ||
+    !Number.isFinite(avgVol5) ||
+    !Number.isFinite(avgVol20) ||
+    !Number.isFinite(return20d) ||
+    !Number.isFinite(return60d) ||
+    !Number.isFinite(rangeLow120) ||
+    !Number.isFinite(rangeHigh120) ||
+    rangeHigh120 <= rangeLow120 ||
+    avgVol20 <= 0
+  ) {
+    return false;
+  }
+
+  // [1] Position filter: price in lower 40% of 120-day range
+  const rangePos = (price - rangeLow120) / (rangeHigh120 - rangeLow120);
+  const inLower40 = rangePos <= 0.4;
+
+  // [2] Volume contraction
+  const volumeContraction = avgVol5 < (avgVol20 * 0.7);
+
+  // [3] First volume spike
+  const firstVolumeSpike = volume > (avgVol20 * 2) && prevVolume < avgVol20;
+
+  // [4] Price reaction
+  const bullishCandle = close > open;
+  const breakoutPrevHigh = price > prevHigh;
+
+  // [5] Filters
+  const earlyReturnFilter = return20d < 10 && return60d < 20;
+
+  return inLower40 &&
+    volumeContraction &&
+    firstVolumeSpike &&
+    bullishCandle &&
+    breakoutPrevHigh &&
+    earlyReturnFilter;
+}
+
 function scoreStock(input) {
   const { code, name, indicators, marketSync, institutionalNetBuy, foreignNetBuy } = input;
   if (!indicators) return null;
@@ -126,6 +184,7 @@ function rankTop(scoredStocks, topN = 5) {
 
 module.exports = {
   detectGoldenPullback,
+  detectEarlyBottomBreakout,
   scoreStock,
   rankTop
 };
