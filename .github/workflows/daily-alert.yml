@@ -1,0 +1,69 @@
+name: Daily Swing Alert
+
+on:
+  schedule:
+    # 16:30 KST (UTC+9) on weekdays = 07:30 UTC
+    - cron: "30 7 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-swing-alert
+  cancel-in-progress: false
+
+jobs:
+  run-alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KIS_BASE_URL: https://openapi.koreainvestment.com:9443
+      KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+      KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+      KIS_CUSTOMER_TYPE: P
+      KIS_TIMEOUT_MS: 12000
+      KIS_RETRY_COUNT: 4
+      KIS_RETRY_BASE_DELAY_MS: 600
+      KIS_TOKEN_PATH: /oauth2/tokenP
+      KIS_TR_VOLUME_RANK: FHPST01710000
+      KIS_TR_FLUCTUATION: FHPST01700000
+      KIS_TR_ITEM_CHART: FHKST03010100
+      KIS_TR_INDEX_CHART: FHKUP03500100
+      KIS_TR_FOREIGN_INST_TOTAL: FHPTJ04400000
+      KIS_INDEX_CODE_KOSPI: "0001"
+      KIS_INDEX_CODE_KOSDAQ: "1001"
+      KIS_INDEX_MARKET_CODE_KOSPI: U
+      KIS_INDEX_MARKET_CODE_KOSDAQ: U
+      KIS_HISTORY_DAYS: 220
+      KIS_CANDIDATE_LIMIT: 60
+      KIS_CONCURRENCY: 4
+      KIS_RANK_MARKET_CODE: J
+      KIS_TOP_N: 10
+      KIS_MIN_PRICE: 1000
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      LOG_LEVEL: info
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secrets
+        run: |
+          test -n "$KIS_APP_KEY" || (echo "Missing secret: KIS_APP_KEY" && exit 1)
+          test -n "$KIS_APP_SECRET" || (echo "Missing secret: KIS_APP_SECRET" && exit 1)
+          test -n "$TELEGRAM_BOT_TOKEN" || (echo "Missing secret: TELEGRAM_BOT_TOKEN" && exit 1)
+          test -n "$TELEGRAM_CHAT_ID" || (echo "Missing secret: TELEGRAM_CHAT_ID" && exit 1)
+
+      - name: Run swing scoring once
+        run: npm run start:once

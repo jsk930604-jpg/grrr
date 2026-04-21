@@ -1,0 +1,326 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KIS Swing Scoring Guide</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --paper: #fffaf0;
+      --ink: #1f2937;
+      --ink-soft: #475569;
+      --brand: #0f766e;
+      --brand-2: #f59e0b;
+      --line: #d6d3d1;
+      --card: #ffffff;
+      --ok: #166534;
+      --warn: #92400e;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: "Space Grotesk", "Pretendard Variable", "Noto Sans KR", sans-serif;
+      background:
+        radial-gradient(circle at 10% 10%, rgba(15, 118, 110, 0.14), transparent 35%),
+        radial-gradient(circle at 90% 20%, rgba(245, 158, 11, 0.16), transparent 28%),
+        linear-gradient(180deg, #f8f6f1 0%, #f2ede2 100%);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    .wrap {
+      width: min(1120px, 92vw);
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    .hero {
+      background: linear-gradient(120deg, rgba(15, 118, 110, 0.96), rgba(17, 94, 89, 0.96));
+      color: #f8fafc;
+      border-radius: 28px;
+      padding: 36px 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      animation: fadeUp 540ms ease-out;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -60px;
+      top: -40px;
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.45), transparent 65%);
+      pointer-events: none;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 3vw, 2.7rem);
+      margin: 0 0 10px;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 760px;
+      color: rgba(248, 250, 252, 0.92);
+      font-size: 1.02rem;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .badge {
+      font-size: 0.9rem;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+    }
+
+    .grid {
+      margin-top: 24px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px 16px;
+      box-shadow: var(--shadow);
+      animation: fadeUp 650ms ease-out;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 1.02rem;
+    }
+
+    .section {
+      margin-top: 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px 18px;
+      box-shadow: var(--shadow);
+      animation: fadeUp 700ms ease-out;
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: clamp(1.2rem, 2.3vw, 1.7rem);
+    }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .step strong {
+      color: var(--brand);
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+
+    pre {
+      margin: 6px 0 0;
+      overflow: auto;
+      background: #111827;
+      color: #d1fae5;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 0.88rem;
+      border: 1px solid #1f2937;
+    }
+
+    code {
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+    }
+
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .score-item {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .score-item b {
+      display: block;
+      font-size: 1.2rem;
+      color: var(--brand);
+      margin-top: 2px;
+    }
+
+    .note {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: var(--warn);
+      font-weight: 600;
+    }
+
+    .footer {
+      margin-top: 16px;
+      color: var(--ink-soft);
+      font-size: 0.92rem;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .score-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 540px) {
+      .hero {
+        border-radius: 20px;
+        padding: 24px 16px;
+      }
+
+      .section {
+        border-radius: 16px;
+        padding: 16px 12px;
+      }
+
+      .score-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>KIS Swing Scoring System</h1>
+      <p>
+        한국투자증권 시세 데이터를 기반으로 스윙 종목을 점수화해 상위 후보를 추리는 자동 분석 도구입니다.
+        아래 가이드는 설치, 실행, 스케줄 운영, 점수 해석까지 한 번에 볼 수 있게 정리했습니다.
+      </p>
+      <div class="badge-row">
+        <span class="badge">Top 10 랭킹</span>
+        <span class="badge">ETF/ETN 자동 제외</span>
+        <span class="badge">1,000원 이하 제외</span>
+        <span class="badge">투자주의 제외</span>
+        <span class="badge">장마감 1일 1회</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h3>1) 데이터 수집</h3>
+        <p>거래량/등락률 랭킹 + 지수 + 기관수급 + 종목 차트를 합쳐 분석 대상 풀을 만듭니다.</p>
+      </article>
+      <article class="card">
+        <h3>2) 필터링</h3>
+        <p>ETF/ETN, 1,000원 이하, 투자주의 종목을 우선 제거해 노이즈를 줄입니다.</p>
+      </article>
+      <article class="card">
+        <h3>3) 점수화</h3>
+        <p>추세/모멘텀/거래량/변동성/시장동조 합산(100점)으로 후보 우선순위를 정합니다.</p>
+      </article>
+    </section>
+
+    <section class="section">
+      <h2>빠른 시작 가이드</h2>
+      <div class="steps">
+        <div class="step">
+          <strong>Step 1. 의존성 설치</strong>
+          <pre><code>npm install</code></pre>
+        </div>
+        <div class="step">
+          <strong>Step 2. 환경변수 준비</strong>
+          <p><code>.env.example</code>를 참고해 <code>.env</code>에 한국투자증권 API 키를 입력합니다.</p>
+        </div>
+        <div class="step">
+          <strong>Step 3. 즉시 1회 실행 테스트</strong>
+          <pre><code>npm run start:once</code></pre>
+        </div>
+        <div class="step">
+          <strong>Step 4. 운영 모드(스케줄 대기)</strong>
+          <pre><code>npm start</code></pre>
+          <p>기본 설정은 평일 장마감 시간대 1회 자동 실행입니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>점수 기준 (100점)</h2>
+      <div class="score-grid">
+        <div class="score-item">추세<b>30</b></div>
+        <div class="score-item">모멘텀<b>25</b></div>
+        <div class="score-item">거래량<b>20</b></div>
+        <div class="score-item">변동성<b>15</b></div>
+        <div class="score-item">시장동조<b>10</b></div>
+      </div>
+      <p class="note">해석: 80점 이상 강매수, 70~79점 매수후보, 70점 미만 관망</p>
+    </section>
+
+    <section class="section">
+      <h2>운영 팁</h2>
+      <div class="steps">
+        <div class="step">
+          <strong>후보 풀이 너무 적을 때</strong>
+          <p><code>KIS_CANDIDATE_LIMIT</code>를 80~120으로 늘려 탐색 범위를 넓히세요.</p>
+        </div>
+        <div class="step">
+          <strong>너무 급등주가 많이 잡힐 때</strong>
+          <p><code>KIS_MIN_PRICE</code>를 올리고, 결과에서 변동성 점수 비중을 함께 확인하세요.</p>
+        </div>
+        <div class="step">
+          <strong>장중 부하를 줄이고 싶을 때</strong>
+          <p><code>KIS_CONCURRENCY</code>를 낮춰 API 동시호출량을 조절하세요.</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="footer">이 페이지는 프로젝트 루트의 <code>index.html</code>로 생성되었습니다. 브라우저에서 바로 열어 확인할 수 있습니다.</p>
+  </div>
+</body>
+</html>
