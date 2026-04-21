@@ -1,0 +1,63 @@
+//@version=5
+indicator("Early Trend Reversal Breakout (EMA)", shorttitle="EarlyReversalEMA", overlay=true)
+
+// ===== Inputs =====
+breakoutLen = input.int(20, "Breakout Lookback (N)", minval=5)
+emaProximityPct = input.float(0.03, "EMA50~EMA200 Proximity (ratio)", minval=0.001, maxval=0.20, step=0.001)
+useRsiFilter = input.bool(true, "Use RSI > 50 Filter")
+rsiLen = input.int(14, "RSI Length", minval=2)
+rsiThreshold = input.float(50.0, "RSI Threshold", minval=1.0, maxval=99.0, step=0.5)
+
+// ===== Core Indicators =====
+ema50 = ta.ema(close, 50)
+ema200 = ta.ema(close, 200)
+volSma20 = ta.sma(volume, 20)
+rsiValue = ta.rsi(close, rsiLen)
+
+// ===== Alert Conditions =====
+// 1) Price Action
+priceAboveEma50 = close > ema50
+
+// 2) EMA Trend Shift
+ema50Up = ema50 > ema50[1]
+
+// 3) Early Golden Cross Zone (CORE)
+emaDistanceRatio = ema200 != 0.0 ? math.abs(ema50 - ema200) / ema200 : na
+emaVeryClose = not na(emaDistanceRatio) and emaDistanceRatio <= emaProximityPct
+goldenCrossNow = ta.crossover(ema50, ema200)
+earlyGoldenZone = emaVeryClose or goldenCrossNow
+
+// 4) Breakout Condition
+priorSwingHigh = ta.highest(high, breakoutLen)[1]
+breakout = close > priorSwingHigh
+
+// 5) Volume Expansion
+volumeExpansion = volume > volSma20
+
+// 6) Optional Momentum Filter
+rsiPass = not useRsiFilter or (rsiValue > rsiThreshold)
+
+// Final BUY signal
+buySignal = priceAboveEma50 and ema50Up and earlyGoldenZone and breakout and volumeExpansion and rsiPass
+
+// ===== Plots =====
+plot(ema50, "EMA 50", color=color.orange, linewidth=2)
+plot(ema200, "EMA 200", color=color.blue, linewidth=2)
+
+plotshape(
+     buySignal,
+     title="BUY Signal",
+     style=shape.labelup,
+     text="BUY",
+     color=color.new(color.lime, 0),
+     textcolor=color.black,
+     size=size.tiny,
+     location=location.belowbar
+)
+
+// ===== Alert =====
+alertcondition(
+     buySignal,
+     title="Early Trend Reversal Breakout BUY",
+     message="BUY: {{ticker}} | Close={{close}} | Early trend reversal breakout confirmed."
+)
