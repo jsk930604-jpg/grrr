@@ -146,12 +146,14 @@ function buildIndicatorSnapshot(candles) {
   const last = close.length - 1;
   const ema50 = ema50Series[last];
   const ema200 = ema200Series[last];
+  const ema50Past1 = ema50Series[last - 1];
   const ema50Past5 = ema50Series[last - 5];
   const rsi14 = rsiSeries[last];
 
   if (
     !Number.isFinite(ema50) ||
     !Number.isFinite(ema200) ||
+    !Number.isFinite(ema50Past1) ||
     !Number.isFinite(ema50Past5) ||
     !Number.isFinite(rsi14)
   ) {
@@ -191,9 +193,17 @@ function buildIndicatorSnapshot(candles) {
   const breakoutWithin3Days = breakoutIndex >= 0 && (last - breakoutIndex) <= 2;
   const breakoutDayBullish = breakoutIndex >= 0 ? close[breakoutIndex] > open[breakoutIndex] : false;
   const breakoutCloseAbovePrev20High = breakoutIndex >= 0 ? close[breakoutIndex] > breakoutPrev20High : false;
-  const breakoutVolumePass = Number.isFinite(breakoutVolumeMultiple) && breakoutVolumeMultiple >= 1.8;
+  const breakoutVolumePass = Number.isFinite(breakoutVolumeMultiple) && breakoutVolumeMultiple > 1.0;
   const breakoutPreVolumeContractionPass = Number.isFinite(breakoutPrev5To20Ratio) && breakoutPrev5To20Ratio <= 0.8;
   const breakoutAgeDays = breakoutIndex >= 0 ? (last - breakoutIndex) : 999;
+
+  const emaDistanceRatio = Number.isFinite(ema200) && ema200 !== 0 ? Math.abs(ema50 - ema200) / ema200 : NaN;
+  const goldenCrossToday = Number.isFinite(ema50Series[last - 1]) &&
+    Number.isFinite(ema200Series[last - 1]) &&
+    ema50Series[last - 1] <= ema200Series[last - 1] &&
+    ema50 > ema200;
+  const emaVeryClose = Number.isFinite(emaDistanceRatio) && emaDistanceRatio <= 0.03;
+  const earlyGoldenZone = emaVeryClose || goldenCrossToday;
 
   let ema50CrossedAboveEma200Within15Days = false;
   for (let i = Math.max(1, last - 14); i <= last; i += 1) {
@@ -227,7 +237,11 @@ function buildIndicatorSnapshot(candles) {
     priceTo120High,
     ema50,
     ema200,
+    ema50Past1,
     ema50Past5,
+    emaDistanceRatio,
+    goldenCrossToday,
+    earlyGoldenZone,
     rsi14,
     return3d,
     return20d,

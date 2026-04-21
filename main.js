@@ -362,10 +362,11 @@ async function runOnce() {
 
   const api = new KisApi(config);
   const historyDays = toInt(process.env.KIS_HISTORY_DAYS, 220);
-  const topN = Math.max(1, toInt(process.env.KIS_TOP_N, 15));
+  const topN = Math.max(1, toInt(process.env.KIS_TOP_N, 10));
   const minPrice = Math.max(0, toInt(process.env.KIS_MIN_PRICE, 1000));
   const candidateLimit = Math.max(topN * 4, toInt(process.env.KIS_CANDIDATE_LIMIT, 60));
   const concurrency = toInt(process.env.KIS_CONCURRENCY, 4);
+  const useRsiFilter = toBool(process.env.KIS_USE_RSI_FILTER, true);
 
   const toDate = formatDate(new Date());
   const fromDate = formatDate(daysAgo(historyDays));
@@ -450,6 +451,7 @@ async function runOnce() {
         code: candidate.code,
         name: candidate.name,
         indicators,
+        useRsiFilter,
         marketSync,
         institutionalNetBuy: institutionMap.get(candidate.code) || 0,
         foreignNetBuy: foreignMap.get(candidate.code) || 0

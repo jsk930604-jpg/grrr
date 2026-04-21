@@ -2,23 +2,16 @@ function detectEarlyTrendReversalBreakout(indicators) {
   const close = Number(indicators.close);
   const ema50 = Number(indicators.ema50);
   const ema200 = Number(indicators.ema200);
-  const ema50Past5 = Number(indicators.ema50Past5);
-  const return20d = Number(indicators.return20d);
-  const return60d = Number(indicators.return60d);
-  const priceTo120High = Number(indicators.priceTo120High);
+  const ema50Past1 = Number(indicators.ema50Past1);
 
   const trendPositionPass =
     Number.isFinite(close) &&
     Number.isFinite(ema50) &&
-    Number.isFinite(ema50Past5) &&
+    Number.isFinite(ema50Past1) &&
     close > ema50 &&
-    ema50 >= ema50Past5;
+    ema50 > ema50Past1;
 
-  const emaStructurePass =
-    Number.isFinite(ema50) &&
-    Number.isFinite(ema200) &&
-    ema200 > 0 &&
-    (Math.abs(ema50 - ema200) / ema200) < 0.15;
+  const earlyGoldenZonePass = Boolean(indicators.earlyGoldenZone);
 
   const breakoutPass =
     Boolean(indicators.breakoutWithin3Days) &&
@@ -26,39 +19,33 @@ function detectEarlyTrendReversalBreakout(indicators) {
     Boolean(indicators.breakoutCloseAbovePrev20High);
 
   const volumePass =
-    Boolean(indicators.breakoutVolumePass) &&
-    Boolean(indicators.breakoutPreVolumeContractionPass);
-
-  const overheatPass =
-    Number.isFinite(return20d) &&
-    Number.isFinite(return60d) &&
-    Number.isFinite(priceTo120High) &&
-    return20d < 12 &&
-    return60d < 25 &&
-    priceTo120High < 0.92;
+    Boolean(indicators.breakoutVolumePass);
 
   return {
-    pass: trendPositionPass && emaStructurePass && breakoutPass && volumePass && overheatPass,
+    pass: trendPositionPass && earlyGoldenZonePass && breakoutPass && volumePass,
     trendPositionPass,
-    emaStructurePass,
+    earlyGoldenZonePass,
     breakoutPass,
-    volumePass,
-    overheatPass
+    volumePass
   };
 }
 
 function scoreStock(input) {
-  const { code, name, indicators } = input;
+  const { code, name, indicators, useRsiFilter = true } = input;
   if (!indicators) return null;
 
   const checks = detectEarlyTrendReversalBreakout(indicators);
-  if (!checks.pass) return null;
+  const rsiPass = !useRsiFilter || (Number.isFinite(indicators.rsi14) && indicators.rsi14 > 50);
+  if (!checks.pass || !rsiPass) return null;
 
   let score = 70;
   const emaCrossBonus = indicators.ema50CrossedAboveEma200Within15Days ? 10 : 0;
   const pullbackBonus = indicators.pullbackNearEma50BeforeBreakout ? 10 : 0;
-  const rsiBonus = Number.isFinite(indicators.rsi14) && indicators.rsi14 >= 45 && indicators.rsi14 <= 65 ? 10 : 0;
-  score += emaCrossBonus + pullbackBonus + rsiBonus;
+  const rsiBonus = Number.isFinite(indicators.rsi14) && indicators.rsi14 > 50 ? 10 : 0;
+  const volumeStrengthBonus = Number.isFinite(indicators.breakoutVolumeMultiple)
+    ? Math.min(10, Math.max(0, (indicators.breakoutVolumeMultiple - 1) * 5))
+    : 0;
+  score += emaCrossBonus + pullbackBonus + rsiBonus + volumeStrengthBonus;
   score = Math.min(100, score);
 
   return {
@@ -82,16 +69,17 @@ function scoreStock(input) {
       emaCrossBonus,
       pullbackBonus,
       rsiBonus,
+      volumeStrengthBonus,
       trendPositionPass: checks.trendPositionPass,
-      emaStructurePass: checks.emaStructurePass,
+      earlyGoldenZonePass: checks.earlyGoldenZonePass,
       breakoutPass: checks.breakoutPass,
       volumePass: checks.volumePass,
-      overheatPass: checks.overheatPass
+      rsiPass
     }
   };
 }
 
-function rankTop(scoredStocks, topN = 15) {
+function rankTop(scoredStocks, topN = 10) {
   return scoredStocks
     .filter(Boolean)
     .sort((a, b) => b.score - a.score)
