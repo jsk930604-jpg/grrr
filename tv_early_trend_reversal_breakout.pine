@@ -1,20 +1,27 @@
 //@version=5
 indicator("Early Trend Reversal Breakout (EMA)", shorttitle="EarlyReversalEMA", overlay=true)
 
-// ===== Inputs =====
+// =====================
+// USER INPUTS
+// =====================
 breakoutLen = input.int(20, "Breakout Lookback (N)", minval=5)
-emaProximityPct = input.float(0.03, "EMA50~EMA200 Proximity (ratio)", minval=0.001, maxval=0.20, step=0.001)
+emaProximityPct = input.float(0.03, "EMA50~EMA200 Proximity Ratio", minval=0.001, maxval=0.20, step=0.001)
 useRsiFilter = input.bool(true, "Use RSI > 50 Filter")
 rsiLen = input.int(14, "RSI Length", minval=2)
 rsiThreshold = input.float(50.0, "RSI Threshold", minval=1.0, maxval=99.0, step=0.5)
 
-// ===== Core Indicators =====
+// =====================
+// CORE INDICATORS
+// =====================
 ema50 = ta.ema(close, 50)
 ema200 = ta.ema(close, 200)
 volSma20 = ta.sma(volume, 20)
 rsiValue = ta.rsi(close, rsiLen)
 
-// ===== Alert Conditions =====
+// =====================
+// BUY ALERT CONDITIONS
+// Trigger only when ALL are true
+// =====================
 // 1) Price Action
 priceAboveEma50 = close > ema50
 
@@ -28,7 +35,8 @@ goldenCrossNow = ta.crossover(ema50, ema200)
 earlyGoldenZone = emaVeryClose or goldenCrossNow
 
 // 4) Breakout Condition
-priorSwingHigh = ta.highest(high, breakoutLen)[1]
+// Use prior bars only to avoid self-referencing current candle in breakout level.
+priorSwingHigh = ta.highest(high[1], breakoutLen)
 breakout = close > priorSwingHigh
 
 // 5) Volume Expansion
@@ -40,7 +48,9 @@ rsiPass = not useRsiFilter or (rsiValue > rsiThreshold)
 // Final BUY signal
 buySignal = priceAboveEma50 and ema50Up and earlyGoldenZone and breakout and volumeExpansion and rsiPass
 
-// ===== Plots =====
+// =====================
+// VISUAL OUTPUT
+// =====================
 plot(ema50, "EMA 50", color=color.orange, linewidth=2)
 plot(ema200, "EMA 200", color=color.blue, linewidth=2)
 
@@ -55,7 +65,9 @@ plotshape(
      location=location.belowbar
 )
 
-// ===== Alert =====
+// =====================
+// ALERT OUTPUT
+// =====================
 alertcondition(
      buySignal,
      title="Early Trend Reversal Breakout BUY",
