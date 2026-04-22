@@ -266,44 +266,52 @@ function buildTelegramMessage(stocks, options) {
       : "⚪ OFF";
 
   const formatNum = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : "-");
+  const formatPrice = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("ko-KR") : "-");
+  const passMark = (flag) => (flag ? "✅" : "❌");
   const top = stocks.slice(0, topN);
 
   const lines = [
-    `📊 <b>Early Trend Reversal Breakout Top ${topN}</b>`,
+    `📊 <b>Early Trend Reversal Breakout TOP ${topN}</b>`,
     `🕒 <b>기준시각</b> <code>${escapeHtml(formatKoreanDateTime(new Date()))}</code>`,
     `🧭 <b>시장상태</b> ${marketStatusText} <code>(score ${marketScore})</code>`,
     `🧹 <b>필터</b> ETF/ETN 제외 | ${minPrice.toLocaleString("ko-KR")}원 초과 | 투자주의 제외`,
     `🚫 <b>제외건수</b> ETF/ETN ${filteredSummary.etfOrEtn} | 저가 ${filteredSummary.lowPrice} | 투자주의 ${filteredSummary.investmentCaution}`,
     "",
-    "<b>Columns</b>",
-    "<code>Ticker | Name | Price | EMA50 | EMA200 | 20D% | 60D% | VolX | Breakout | Score</code>",
+    "🎯 <b>조건 요약</b> 가격>EMA50 · EMA50상승 · EMA50~EMA200 근접/골든크로스 · 20일 고가 돌파 · 거래량 확장 · RSI>50",
     "━━━━━━━━━━━━"
   ];
 
   if (!top.length) {
-    lines.push("조건을 모두 통과한 종목이 없습니다.");
+    lines.push("❗ <b>조건을 모두 통과한 종목이 없습니다.</b>");
     return lines.join("\n");
   }
 
-  top.forEach((stock) => {
-    lines.push(
-      `<code>${escapeHtml(stock.code)} | ${escapeHtml(stock.name)} | ${formatNum(stock.price)} | ${formatNum(stock.ema50)} | ${formatNum(stock.ema200)} | ${formatNum(stock.return20d)} | ${formatNum(stock.return60d)} | ${formatNum(stock.volumeMultiple)} | ${escapeHtml(stock.breakoutStatus)} | ${formatNum(stock.score, 0)}</code>`
-    );
+  const medal = ["🥇", "🥈", "🥉"];
+  top.forEach((stock, idx) => {
+    const icon = medal[idx] || "📌";
+    const b = stock.breakdown || {};
+    const entrySignal = stock.signal === "BUY" ? "🟢 <b>BUY</b>" : "🟡 <b>OBSERVE</b>";
+    lines.push(`${icon} <b>${idx + 1}. ${escapeHtml(stock.code)} ${escapeHtml(stock.name)}</b>`);
+    lines.push(`   ${entrySignal} | 🧮 <b>점수</b> <code>${formatNum(stock.score, 0)}</code>`);
+    lines.push(`   💰 <b>현재가</b> <code>${formatPrice(stock.price)}원</code> | EMA50 <code>${formatPrice(stock.ema50)}</code> | EMA200 <code>${formatPrice(stock.ema200)}</code>`);
+    lines.push(`   📈 20D <code>${formatNum(stock.return20d)}%</code> | 60D <code>${formatNum(stock.return60d)}%</code> | 🔊 Vol <code>x${formatNum(stock.volumeMultiple)}</code>`);
+    lines.push(`   ${passMark(b.trendPositionPass)}가격>EMA50 ${passMark(b.earlyGoldenZonePass)}조기GC존 ${passMark(b.breakoutPass)}돌파 ${passMark(b.volumePass)}거래량 ${passMark(b.rsiPass)}RSI`);
+    lines.push("");
   });
 
   lines.push("━━━━━━━━━━━━");
-  lines.push("<b>TOP 5 Summary</b>");
+  lines.push("📝 <b>TOP 5 매매 요약</b>");
   top.slice(0, 5).forEach((stock, idx) => {
     const entryReasons = [];
-    if (stock.breakdown?.emaCrossBonus) entryReasons.push("EMA50>EMA200 recent cross");
-    if (stock.breakdown?.pullbackBonus) entryReasons.push("pullback near EMA50");
-    if (stock.breakdown?.rsiBonus) entryReasons.push("RSI(14) in 45~65");
+    if (stock.breakdown?.emaCrossBonus) entryReasons.push("EMA50-EMA200 최근 골든크로스");
+    if (stock.breakdown?.pullbackBonus) entryReasons.push("돌파 전 EMA50 눌림");
+    if (stock.breakdown?.rsiBonus) entryReasons.push("RSI 모멘텀(>50)");
     const entryText = entryReasons.length
-      ? `Core breakout + ${entryReasons.join(", ")}`
-      : "Core breakout rules passed with valid volume expansion";
-    lines.push(`<b>${idx + 1}. ${escapeHtml(stock.code)} ${escapeHtml(stock.name)}</b>`);
-    lines.push(`- Entry: ${escapeHtml(entryText)}`);
-    lines.push("- Invalidation: Daily close below EMA50");
+      ? `코어 돌파 + ${entryReasons.join(", ")}`
+      : "코어 돌파 조건 충족 + 거래량 확장";
+    lines.push(`<b>${idx + 1}) ${escapeHtml(stock.code)} ${escapeHtml(stock.name)}</b>`);
+    lines.push(`- 🚀 진입 근거: ${escapeHtml(entryText)}`);
+    lines.push("- 🛑 무효화: 일봉 종가가 EMA50 하향 이탈");
   });
 
   return lines.join("\n");
@@ -335,7 +343,9 @@ function buildNoMatchMessage(options) {
     `🧹 <b>필터</b> ETF/ETN 제외 | ${minPrice.toLocaleString("ko-KR")}원 초과 | 투자주의 제외`,
     `🚫 <b>제외건수</b> ETF/ETN ${filteredSummary.etfOrEtn} | 저가 ${filteredSummary.lowPrice} | 투자주의 ${filteredSummary.investmentCaution}`,
     "",
-    `ℹ️ <b>결과</b> ${escapeHtml(reason)}`
+    "⚠️ <b>알림 결과</b>",
+    `- ${escapeHtml(reason)}`,
+    "- 다음 실행에서 조건 충족 시 자동으로 종목 리스트를 전송합니다."
   ].join("\n");
 }
 
